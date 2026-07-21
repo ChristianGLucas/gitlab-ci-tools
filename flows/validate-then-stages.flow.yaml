@@ -1,0 +1,22 @@
+name: validate-then-stages
+description: 'Composability smoke flow within gitlab-ci-tools: ValidatePipeline feeds ListStages via a literal(...) YAML constant adapter, gated on a valid==true condition, proving the edge resolves against this package''s REAL, registry-resolved schema.'
+nodes:
+    - alias: validated
+      package: christiangeorgelucas/gitlab-ci-tools@0.1.0
+      node: ValidatePipeline
+      col: 0
+      row: 0
+    - alias: stages
+      package: christiangeorgelucas/gitlab-ci-tools@0.1.0
+      node: ListStages
+      col: 1
+      row: 0
+edges:
+    - from: validated
+      to: stages
+      adapter:
+        'literal(''{stages: [build, test, deploy], build: {stage: build, script: [echo hi]}}'')': yaml
+      condition:
+        op: EQ
+        field: valid
+        value: true

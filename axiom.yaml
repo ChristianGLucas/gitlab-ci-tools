@@ -1,0 +1,73 @@
+name: christiangeorgelucas/gitlab-ci-tools
+version: 0.1.0
+language: typescript
+description: 'Deterministic, GitLab-CI-semantic parsing and structural inspection of .gitlab-ci.yml pipeline configuration files — jobs, stages, needs/stage DAGs, rules/only/except, include directives, variables, images/services, artifacts, cache, and extends inheritance resolution. Distinct from generic YAML/JSON conversion: this package understands the GitLab CI schema and pulls out exactly what a CI/CD-auditing agent needs.'
+nodes:
+    - name: ParsePipeline
+      description: 'Parse a .gitlab-ci.yml pipeline into its top-level structure: effective stage order, a brief per-job summary (id, stage, has_script, script line count), and flags for whether the pipeline declares variables:, default:, workflow:, and include:.'
+      input: Pipeline
+      output: ParsePipelineResult
+    - name: ListJobs
+      description: 'List every real (non-hidden) job in the pipeline with name, stage, script, needs, rules, and when — correctly excluding reserved top-level keywords (stages, variables, default, include, workflow, image, services, cache, before_script, after_script, types) and hidden/template jobs (names starting with ".") from the job list.'
+      input: Pipeline
+      output: ListJobsResult
+    - name: ListStages
+      description: 'List the pipeline''s stages in effective execution order, including the always-implicit ".pre" (first) and ".post" (last) stages GitLab adds regardless of declaration. Uses the explicit top-level stages: list when present, else GitLab''s default ["build", "test", "deploy"].'
+      input: Pipeline
+      output: ListStagesResult
+    - name: GetJobConfig
+      description: 'Extract one job''s full raw config: script, before_script, after_script, image, services, variables, artifacts, cache, rules, only/except, needs, extends, tags, when, and allow_failure.'
+      input: JobRequest
+      output: GetJobConfigResult
+    - name: ExtractJobDependencies
+      description: 'Extract the pipeline''s needs: dependency graph as an edge list (job needs depends_on), plus the full set of real job ids, ready for topological analysis.'
+      input: Pipeline
+      output: ExtractJobDependenciesResult
+    - name: ExtractStageDAG
+      description: 'Extract the stage-ordering DAG: effective stage order (with implicit .pre/.post) paired with which real jobs run in each stage — jobs in the same stage run in parallel; each stage waits for the previous stage to complete.'
+      input: Pipeline
+      output: ExtractStageDAGResult
+    - name: ExtractRules
+      description: 'Extract one job''s rules:, only:, and except: conditions in full — if/changes/exists/when/allow_failure/variables/start_in per rule, and the normalized only/except refs/kinds/variables/changes.'
+      input: JobRequest
+      output: ExtractRulesResult
+    - name: ExtractIncludes
+      description: 'Extract every include: directive in the pipeline — local, project, remote, template, and component includes — classified and decomposed (local path / project+ref+file / remote URL / template name / component ref) with any inputs:. Never fetches the included content; report only.'
+      input: Pipeline
+      output: ExtractIncludesResult
+    - name: ExtractVariables
+      description: 'Extract the global (top-level) variables: block and every job-level variables: block across the pipeline.'
+      input: Pipeline
+      output: ExtractVariablesResult
+    - name: ExtractImages
+      description: 'Extract every container image referenced in the pipeline for supply-chain auditing: the global image: and services:, plus each job''s own image: and services: overrides.'
+      input: Pipeline
+      output: ExtractImagesResult
+    - name: ExtractArtifacts
+      description: 'Extract every job''s artifacts: declaration — paths, exclude, expire_in, when, reports (type -> path), name, public, and expose_as.'
+      input: Pipeline
+      output: ExtractArtifactsResult
+    - name: ExtractCache
+      description: 'Extract every job''s cache: declaration(s) — key (literal or files/prefix-derived), paths, policy, when, unprotect, and untracked. A job may declare one cache block or a list of several; both forms are normalized to a list here.'
+      input: Pipeline
+      output: ExtractCacheResult
+    - name: ResolveExtends
+      description: 'Resolve a job''s extends: inheritance by deep-merging the extended job(s)'' config into the job''s own, implementing GitLab''s documented merge rule: hash-valued keys (like variables:) are recursively deep-merged key by key, while array-valued and scalar keys (script, tags, rules, image, ...) are wholly replaced by the more specific value. Multiple extends targets apply in listed order; the job''s own keys always win. Detects and reports extends cycles.'
+      input: JobRequest
+      output: ResolveExtendsResult
+    - name: GetJobsByStage
+      description: 'List the ids of every real job assigned to a given stage name.'
+      input: StageRequest
+      output: GetJobsByStageResult
+    - name: DetectHiddenJobs
+      description: 'Detect hidden/template job keys (names starting with ".") in the pipeline — entries that are not scheduled as real jobs but exist to be pulled in via extends:.'
+      input: Pipeline
+      output: DetectHiddenJobsResult
+    - name: SummarizePipeline
+      description: 'Summarize a pipeline: real job count, hidden/template job count, stage count, include: directive count, distinct global+job variable count, and whether default: / workflow: blocks are present.'
+      input: Pipeline
+      output: SummarizePipelineResult
+    - name: ValidatePipeline
+      description: 'Validate a pipeline''s basic structural correctness: every job''s stage: (if set) is a declared stage, every needs: entry references an existing same-pipeline job (cross-pipeline needs with pipeline:/project: are skipped), and every extends: target exists. Reports every violation found, not just the first.'
+      input: Pipeline
+      output: ValidatePipelineResult

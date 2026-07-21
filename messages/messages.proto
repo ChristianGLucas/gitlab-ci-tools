@@ -1,0 +1,468 @@
+// This file defines the data contracts (messages) for your Axiom package.
+// Every node's --input and --output refers to a message defined here.
+//
+// Run `axiom create message <Name>` to scaffold a new message below.
+// Run `axiom generate` to compile these definitions into language bindings in gen/.
+//
+// DOCUMENTATION
+//   Comments written directly above a message or field declaration are extracted
+//   automatically at publish time and shown in the Axiom registry as documentation.
+//   Write your descriptions there — no separate doc files needed.
+//
+//   Leading comment  (no blank line before the declaration) → registry description ✓
+//   Detached comment (blank line before the declaration)    → ignored by registry  ✗
+//
+// This file is yours to edit. Axiom only appends new message blocks — it never
+// overwrites or removes content you have written.
+
+syntax = "proto3";
+
+package christiangeorgelucas.gitlab_ci_tools;
+
+// A raw `.gitlab-ci.yml` pipeline configuration file as caller-supplied YAML
+// text — one single YAML document. Text only; never a project/ref reference
+// (this package never touches the GitLab API, a git checkout, or the
+// network — the caller always supplies the file's text directly).
+message Pipeline {
+  string yaml = 1;
+}
+
+// A Pipeline plus a target job id (the job's key in the top-level job map)
+// for nodes that operate on one job at a time.
+message JobRequest {
+  string yaml = 1;
+  string job_id = 2;
+}
+
+// A Pipeline plus a target stage name.
+message StageRequest {
+  string yaml = 1;
+  string stage = 2;
+}
+
+// A generic string key/value pair — reused for `variables:` entries and
+// `reports:`/`inputs:` maps.
+message KeyValue {
+  string key = 1;
+  string value = 2;
+}
+
+// A structural or parse problem found while inspecting a pipeline, with a
+// short JSON-Pointer-ish path (e.g. "jobs.build", "jobs.build.needs[0]")
+// identifying where it applies.
+message PipelineIssue {
+  string path = 1;
+  string message = 2;
+}
+
+// A resolved `image:` (global or per-job), whether declared as a bare
+// string or the `{name, entrypoint, pull_policy}` object form.
+message ImageRef {
+  string name = 1;
+  repeated string entrypoint = 2;
+  string pull_policy = 3;
+}
+
+// One `services:` entry — same shape as ImageRef plus alias/command/
+// variables, which only services (not `image:`) support.
+message ServiceRef {
+  string name = 1;
+  repeated string entrypoint = 2;
+  string pull_policy = 3;
+  string alias = 4;
+  repeated string command = 5;
+  repeated KeyValue variables = 6;
+}
+
+// One `cache:` block. A job may declare a single cache object or a list of
+// them (GitLab supports multiple named caches per job); this message
+// represents one entry either way.
+message CacheConfig {
+  // The cache key: either a literal string, or derived from `key.files`
+  // (key_files populated) / `key.prefix`. "" when cache uses the default
+  // key.
+  string key = 1;
+  repeated string key_files = 2;
+  string key_prefix = 3;
+  repeated string paths = 4;
+  // "pull-push" (default), "pull", or "push".
+  string policy = 5;
+  // "on_success" (default), "on_failure", or "always".
+  string when = 6;
+  bool unprotect = 7;
+  bool untracked = 8;
+}
+
+// One `artifacts:` block.
+message ArtifactsConfig {
+  repeated string paths = 1;
+  repeated string exclude = 2;
+  string expire_in = 3;
+  // "on_success" (default), "on_failure", or "always".
+  string when = 4;
+  // reports.<type> -> path, e.g. "junit" -> "report.xml".
+  repeated KeyValue reports = 5;
+  string name = 6;
+  bool public_artifacts = 7;
+  bool public_specified = 8;
+  string expose_as = 9;
+}
+
+// One entry of a job's `rules:` list.
+message RuleCondition {
+  // Raw, unevaluated `if:` expression text; "" when this rule has no `if:`.
+  string if_condition = 1;
+  repeated string changes = 2;
+  repeated string exists = 3;
+  // "on_success" (default), "on_failure", "always", "never", "manual",
+  // "delayed"; "" when the rule doesn't override `when:`.
+  string when = 4;
+  bool allow_failure = 5;
+  bool allow_failure_specified = 6;
+  repeated KeyValue variables = 7;
+  // `start_in:` — only meaningful when when == "delayed".
+  string start_in = 8;
+}
+
+// A legacy `only:`/`except:` block, whether declared as a bare list of refs
+// or the expanded `{refs, kinds, variables, changes}` object form.
+message OnlyExceptConfig {
+  bool specified = 1;
+  repeated string refs = 2;
+  repeated string kinds = 3;
+  repeated string variables = 4;
+  repeated string changes = 5;
+}
+
+// One `needs:` entry, whether declared as a bare job-name string or the
+// expanded `{job, artifacts, optional, pipeline, project, ref}` object form.
+message NeedRef {
+  string job = 1;
+  // True when this entry was a bare string (job name only) rather than an
+  // object — the object form's own fields below are all zero-valued then.
+  bool is_simple = 2;
+  bool artifacts = 3;
+  bool artifacts_specified = 4;
+  bool optional = 5;
+  bool optional_specified = 6;
+  // Cross-pipeline needs only:
+  string pipeline = 7;
+  string project = 8;
+  string ref = 9;
+}
+
+// A job's `allow_failure:`, whether a bare bool or the
+// `{exit_codes: [...]}` object form.
+message AllowFailureConfig {
+  bool allowed = 1;
+  bool specified = 2;
+  repeated int32 exit_codes = 3;
+}
+
+// One `include:` entry, classified by which of local/project/remote/
+// template/component it uses. This package only ever REPORTS include
+// directives — it never fetches them (no network, no GitLab API).
+message IncludeEntry {
+  // "local" | "project" | "remote" | "template" | "component" | "unknown".
+  string kind = 1;
+  // Populated for kind == "local".
+  string local = 2;
+  // Populated for kind == "project" or "component".
+  string project = 3;
+  string ref = 4;
+  // Populated for kind == "project" (file path within the project).
+  string file = 5;
+  // Populated for kind == "remote".
+  string remote = 6;
+  // Populated for kind == "template".
+  string template = 7;
+  // Populated for kind == "component" (the component's ref path, e.g.
+  // "gitlab.example.com/my-org/my-component@1.0").
+  string component = 8;
+  // `inputs:` supplied to a project/component include, if any.
+  repeated KeyValue inputs = 9;
+}
+
+// ---------------------------------------------------------------------------
+// ParsePipeline — top-level structural overview
+// ---------------------------------------------------------------------------
+
+// One job's brief identity, as surfaced in the whole-pipeline overview.
+message JobBrief {
+  string job_id = 1;
+  string stage = 2;
+  bool has_script = 3;
+  int32 script_line_count = 4;
+}
+
+message ParsePipelineResult {
+  // Effective stage order (see ListStages for the same computation
+  // standalone, including the implicit .pre/.post positioning).
+  repeated string stages = 1;
+  repeated JobBrief jobs = 2;
+  bool has_variables = 3;
+  bool has_default = 4;
+  bool has_workflow = 5;
+  bool has_include = 6;
+  // Set only for a whole-document failure (oversized input, unparseable
+  // YAML, not a mapping). Empty on success, even when the pipeline is
+  // otherwise unusual (e.g. zero jobs).
+  string error = 7;
+}
+
+// ---------------------------------------------------------------------------
+// ListJobs — every real (non-hidden) job, full attribute set
+// ---------------------------------------------------------------------------
+
+message JobSummary {
+  string job_id = 1;
+  string stage = 2;
+  repeated string script = 3;
+  repeated NeedRef needs = 4;
+  repeated RuleCondition rules = 5;
+  string when = 6;
+}
+
+message ListJobsResult {
+  repeated JobSummary jobs = 1;
+  // Set only for a whole-document failure.
+  string error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// ListStages
+// ---------------------------------------------------------------------------
+
+message ListStagesResult {
+  // Effective stage order, INCLUDING the always-implicit ".pre" (first) and
+  // ".post" (last) stages that GitLab adds regardless of whether they were
+  // declared.
+  repeated string stages = 1;
+  // True when the pipeline declared no top-level `stages:` key at all, so
+  // the GitLab default (["build", "test", "deploy"]) was used for the
+  // user-defined middle portion.
+  bool is_default = 2;
+  string error = 3;
+}
+
+// ---------------------------------------------------------------------------
+// GetJobConfig — one job's full raw config
+// ---------------------------------------------------------------------------
+
+message GetJobConfigResult {
+  bool found = 1;
+  string job_id = 2;
+  string stage = 3;
+  repeated string script = 4;
+  repeated string before_script = 5;
+  repeated string after_script = 6;
+  ImageRef image = 7;
+  bool has_image = 8;
+  repeated ServiceRef services = 9;
+  repeated KeyValue variables = 10;
+  ArtifactsConfig artifacts = 11;
+  bool has_artifacts = 12;
+  repeated CacheConfig cache = 13;
+  repeated RuleCondition rules = 14;
+  OnlyExceptConfig only = 15;
+  OnlyExceptConfig except = 16;
+  repeated NeedRef needs = 17;
+  repeated string extends = 18;
+  repeated string tags = 19;
+  string when = 20;
+  AllowFailureConfig allow_failure = 21;
+  // Set for a whole-document failure OR when job_id names a job that does
+  // not exist (found stays false in the latter case).
+  string error = 22;
+}
+
+// ---------------------------------------------------------------------------
+// ExtractJobDependencies — the needs: graph, edge-list shaped
+// ---------------------------------------------------------------------------
+
+message JobDependencyEdge {
+  string job_id = 1;
+  string depends_on = 2;
+}
+
+message ExtractJobDependenciesResult {
+  // Every real (non-hidden) job id, in document order — including jobs
+  // with no `needs:` at all.
+  repeated string job_ids = 1;
+  repeated JobDependencyEdge edges = 2;
+  string error = 3;
+}
+
+// ---------------------------------------------------------------------------
+// ExtractStageDAG — stage-ordering DAG: which jobs run in which stage, in
+// effective stage order
+// ---------------------------------------------------------------------------
+
+message StageJobs {
+  string stage = 1;
+  repeated string job_ids = 2;
+}
+
+message ExtractStageDAGResult {
+  // Same effective ordering as ListStages (.pre first, .post last).
+  repeated string stages = 1;
+  repeated StageJobs stage_jobs = 2;
+  string error = 3;
+}
+
+// ---------------------------------------------------------------------------
+// ExtractRules — one job's rules/only/except
+// ---------------------------------------------------------------------------
+
+message ExtractRulesResult {
+  bool found = 1;
+  repeated RuleCondition rules = 2;
+  OnlyExceptConfig only = 3;
+  OnlyExceptConfig except = 4;
+  string error = 5;
+}
+
+// ---------------------------------------------------------------------------
+// ExtractIncludes
+// ---------------------------------------------------------------------------
+
+message ExtractIncludesResult {
+  repeated IncludeEntry includes = 1;
+  string error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// ExtractVariables
+// ---------------------------------------------------------------------------
+
+message JobVariables {
+  string job_id = 1;
+  repeated KeyValue variables = 2;
+}
+
+message ExtractVariablesResult {
+  repeated KeyValue global_variables = 1;
+  repeated JobVariables job_variables = 2;
+  string error = 3;
+}
+
+// ---------------------------------------------------------------------------
+// ExtractImages — supply-chain image inventory
+// ---------------------------------------------------------------------------
+
+message JobImages {
+  string job_id = 1;
+  ImageRef image = 2;
+  bool has_image = 3;
+  repeated ServiceRef services = 4;
+}
+
+message ExtractImagesResult {
+  ImageRef global_image = 1;
+  bool has_global_image = 2;
+  repeated ServiceRef global_services = 3;
+  repeated JobImages job_images = 4;
+  string error = 5;
+}
+
+// ---------------------------------------------------------------------------
+// ExtractArtifacts
+// ---------------------------------------------------------------------------
+
+message JobArtifacts {
+  string job_id = 1;
+  ArtifactsConfig artifacts = 2;
+}
+
+message ExtractArtifactsResult {
+  repeated JobArtifacts artifacts = 1;
+  string error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// ExtractCache
+// ---------------------------------------------------------------------------
+
+message JobCache {
+  string job_id = 1;
+  repeated CacheConfig cache = 2;
+}
+
+message ExtractCacheResult {
+  repeated JobCache caches = 1;
+  string error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// ResolveExtends — deep-merged effective job config through the extends:
+// chain
+// ---------------------------------------------------------------------------
+
+message ResolveExtendsResult {
+  bool found = 1;
+  // The extends chain actually walked, in resolution order (base-most
+  // first), NOT including job_id itself.
+  repeated string extends_chain = 2;
+  string merged_stage = 3;
+  repeated string merged_script = 4;
+  repeated string merged_before_script = 5;
+  repeated string merged_after_script = 6;
+  repeated KeyValue merged_variables = 7;
+  repeated string merged_tags = 8;
+  ImageRef merged_image = 9;
+  bool has_image = 10;
+  repeated RuleCondition merged_rules = 11;
+  repeated CacheConfig merged_cache = 12;
+  ArtifactsConfig merged_artifacts = 13;
+  bool has_artifacts = 14;
+  // Set for a whole-document failure, job_id not found, or an extends
+  // cycle (e.g. "extends cycle detected: a -> b -> a").
+  string error = 15;
+}
+
+// ---------------------------------------------------------------------------
+// GetJobsByStage
+// ---------------------------------------------------------------------------
+
+message GetJobsByStageResult {
+  repeated string job_ids = 1;
+  string error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// DetectHiddenJobs
+// ---------------------------------------------------------------------------
+
+message DetectHiddenJobsResult {
+  repeated string hidden_job_ids = 1;
+  string error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// SummarizePipeline
+// ---------------------------------------------------------------------------
+
+message SummarizePipelineResult {
+  int32 job_count = 1;
+  int32 hidden_job_count = 2;
+  int32 stage_count = 3;
+  int32 include_count = 4;
+  int32 variable_count = 5;
+  bool has_workflow = 6;
+  bool has_default = 7;
+  string error = 8;
+}
+
+// ---------------------------------------------------------------------------
+// ValidatePipeline
+// ---------------------------------------------------------------------------
+
+message ValidatePipelineResult {
+  // True only when issues is empty.
+  bool valid = 1;
+  repeated PipelineIssue issues = 2;
+  // Set only for a hard parse failure that prevented any structural
+  // checking at all. A structural problem in an otherwise-parseable
+  // document is reported via issues instead, with valid = false.
+  string error = 3;
+}
