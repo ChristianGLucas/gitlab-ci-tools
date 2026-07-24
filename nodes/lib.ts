@@ -25,12 +25,6 @@
 
 import * as yaml from 'js-yaml';
 
-/** Ceiling for a whole pipeline file's raw text (Pipeline.yaml /
- * JobRequest.yaml / StageRequest.yaml). 2 MB — comfortably under the
- * ~4 MiB Axiom transport cap even after script text is echoed back in
- * output fields, and far beyond any real .gitlab-ci.yml file. */
-export const MAX_YAML_BYTES = 2_000_000;
-
 /** js-yaml's own collection-nesting-depth bound (does not count aliases).
  * Real pipeline files rarely nest more than ~10 levels; 100 is generous
  * headroom while still bounding pathological input. */
@@ -48,14 +42,11 @@ export const MAX_YAML_ALIASES = 200;
  * detection (belt-and-braces against a very long, non-cyclic chain). */
 export const MAX_EXTENDS_DEPTH = 50;
 
+// Kept as a distinct Error subclass so every node's catch block can still
+// narrow on it (currently unreachable — no bound in this file throws it —
+// but it stays part of the public error-handling contract call sites rely
+// on).
 export class BoundsError extends Error {}
-
-/** Rejects oversized input (by UTF-8 byte length, not JS string length). */
-export function checkBytes(value: string, field: string, max: number): void {
-  if (Buffer.byteLength(value, 'utf8') > max) {
-    throw new BoundsError(`${field} exceeds ${max} bytes`);
-  }
-}
 
 /** Turns a caught value into a stable error message. */
 export function errorMessage(e: unknown, context: string): string {
@@ -75,14 +66,12 @@ export interface ParsedPipeline {
   parseError: string | null;
 }
 
-/** Bounds + safely parses one pipeline file's raw YAML text. A
- * `.gitlab-ci.yml` file is a SINGLE YAML document; a multi-document input
- * (or any other YAML/size problem) is reported as a parse error rather
- * than silently taking the first document. Never throws for a parse
- * problem (captured in parseError); throws BoundsError only for oversized
- * input. */
-export function parsePipelineYaml(text: string, field = 'yaml'): ParsedPipeline {
-  checkBytes(text, field, MAX_YAML_BYTES);
+/** Safely parses one pipeline file's raw YAML text. A `.gitlab-ci.yml`
+ * file is a SINGLE YAML document; a multi-document input (or any other
+ * YAML problem) is reported as a parse error rather than silently taking
+ * the first document. Never throws for a parse problem (captured in
+ * parseError). */
+export function parsePipelineYaml(text: string): ParsedPipeline {
   try {
     const data = yaml.load(text, {
       maxDepth: MAX_YAML_DEPTH,

@@ -56,13 +56,6 @@ describe('ParsePipeline', () => {
     expect(result.getError()).not.toBe('');
   });
 
-  it('rejects oversized input with a structured error', () => {
-    const input = new Pipeline();
-    input.setYaml('build:\n  script:\n    - ' + 'x'.repeat(2_100_000));
-    const result = parsePipeline(ctx, input);
-    expect(result.getError()).toMatch(/exceeds/);
-  });
-
   it('is deterministic across repeated calls on the same input', () => {
     const input = new Pipeline();
     input.setYaml(FIXTURE_PIPELINE);

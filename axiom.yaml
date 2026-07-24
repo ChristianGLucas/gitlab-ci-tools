@@ -1,5 +1,5 @@
 name: christiangeorgelucas/gitlab-ci-tools
-version: 0.1.0
+version: 0.1.1
 language: typescript
 description: 'Deterministic, GitLab-CI-semantic parsing and structural inspection of .gitlab-ci.yml pipeline configuration files — jobs, stages, needs/stage DAGs, rules/only/except, include directives, variables, images/services, artifacts, cache, and extends inheritance resolution. Distinct from generic YAML/JSON conversion: this package understands the GitLab CI schema and pulls out exactly what a CI/CD-auditing agent needs.'
 nodes:
